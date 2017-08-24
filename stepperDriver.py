@@ -10,8 +10,13 @@ import time
 # -it is a repeating sequence of 4 polarities, resulting in 4 steps.
 # -this code goes through a single 4 step sequence. It will need to be expanded to do more than this simple partial rotation.
 
-# amount of time between each step. Could be shortened to make it more smooth.
-sleepTime = 0.5
+############################ turntable motor ########################
+#refered to as: degree
+# see Dropbox/3d/scanner_line.txt for wiring from L239 chip to motor.
+# see Dropbox/3d/lineScanner.ods for data about speed/degrees and consistency.
+# amount of time between each step. 
+#0.01 is quite fast.
+sleepTime = 0.01
 # enable a side of the L293D
 enable = 1
 # disable a side of L293D
@@ -20,21 +25,23 @@ disable = 0
 high = 1
 # set to ground on motor
 low = 0
+#coil stages per degree
+stagesPerDegree = 128/30
 
 ###gpio pins to able/disable l293d sides. 
 #Each side has it's own enable/dispable pin.
 #side 1
-side1OfL239ChipEnabler = mraa.Gpio(2)
-side1OfL239ChipEnabler.dir(mraa.DIR_OUT)
+enableDegreeL239Side1 = mraa.Gpio(2)
+enableDegreeL239Side1.dir(mraa.DIR_OUT)
 #Goes to pin 1 of L239
 
 #side 2
-side2OfL239ChipEnabler = mraa.Gpio(3)
+enableDegreeL239Side2 = mraa.Gpio(3)
 #Goes to pin 9 of L239
-side2OfL239ChipEnabler.dir(mraa.DIR_OUT)
+enableDegreeL239Side2.dir(mraa.DIR_OUT)
 
-#These 2 pins are shared by each coil, by enabling/disable each side of the l293d.
-#Writing 1 to high, and the other to low, creates the circuit on the currently selected coil, which drives the motor.
+#These 2 pins are shared by both stepper motor coils, by enabling/disabling each side of the l293d.
+#Writing 1 side to high, and the other to low, creates the circuit on the currently required coil, which drives the motor.
 #In other words: coilLead1 goes into the current coil, and coilLead2 comes back out of it. 
 coilLead1 = mraa.Gpio(4)
 coilLead2 = mraa.Gpio(5)
@@ -42,119 +49,232 @@ coilLead1.dir(mraa.DIR_OUT)
 coilLead2.dir(mraa.DIR_OUT)
 
 def setCoilsForwardBiased():
-  coilLead1.write(high)
   coilLead2.write(low)
+  coilLead1.write(high)
+  
 
 def setCoilsReverseBiased():
   coilLead1.write(low)
   coilLead2.write(high)
 
-################################ turn stage 1 forward ############################
-def turnStage1Forward(): 
-  # side 1 will be used 1st
-  side1OfL239ChipEnabler.write(enable)
+def setCoilsNeutral():
+  coilLead1.write(low)
+  coilLead2.write(low)
+
+############################ stage base ###############################
+#task
+ #Base function for turning the motor 1 step.
+ #refer to safaribooks:Practical Electronics: 15.7 on operation of stepper motor.
+ #Has to apply to:
+  #2 coils:
+   #each controlled by 1 side of the l239 chip
+    #only 1 side of chip can be active at 1 time.
+   #each can have a forward or reverse polarity
+#given:
+ #chipSide: the side of the L239 chip being used.
+ #coilPolarity: Forward or reverse bias of the coil in the motor.
+def turnMotor1Step(chipSide, setCoilPolarity):
+  chipSide.write(enable)
   
-  setCoilsForwardBiased()
+  setCoilPolarity()
 
   time.sleep(sleepTime)
-
-  side1OfL239ChipEnabler.write(disable)
-
-
-################################ turn stage 1 back ############################
-def turnStage1Backwards():
-  # side 1 will be used 1st
-  side1OfL239ChipEnabler.write(enable)
   
-  setCoilsReverseBiased()
-
-  time.sleep(sleepTime)
+  #setCoilsNeutral()
+  #not sure this is usefull. Try without for now.
   
-  side1OfL239ChipEnabler.write(disable)
+  chipSide.write(disable)
+################################ stage 1  ############################
+def energizeStage1():
+  turnMotor1Step(enableDegreeL239Side1, setCoilsForwardBiased)
 
-
-
-############################### turn stage 2 forward ##############################
-def turnStage2Forward():
-  side2OfL239ChipEnabler.write(enable)
-  
-  setCoilsForwardBiased()
-  
-  time.sleep(sleepTime)
-  
-  side2OfL239ChipEnabler.write(disable)
-
-############################### turn stage 2 back ########################3
-def turnStage2Backwards():
-  side2OfL239ChipEnabler.write(enable)
-
-  setCoilsReverseBiased()
-  time.sleep(sleepTime)
-  side2OfL239ChipEnabler.write(disable)
+############################### stage 2 ##############################
+def energizeStage2():
+  #turnMotor1Step(enableDegreeL239Side2, setCoilsReverseBiased)
+  #should be
+  turnMotor1Step(enableDegreeL239Side2, setCoilsForwardBiased)
 
 ############################### stage 3 #################################
-def turnStage3Forward():
-  side1OfL239ChipEnabler.write(enable)
-  #set the voltages to create coil circuit
-  setCoilsReverseBiased()
-  #enable side 1
-  
-  
-  time.sleep(sleepTime)
-  side1OfL239ChipEnabler.write(disable)
+def energizeStage3():
+  turnMotor1Step(enableDegreeL239Side1, setCoilsReverseBiased)
 
 ################################# stage 4 ###############################
-def turnStage4Forward():
-  side2OfL239ChipEnabler.write(enable)
+def energizeStage4():
+  turnMotor1Step(enableDegreeL239Side2, setCoilsReverseBiased)
 
-  setCoilsReverseBiased()
-
-  time.sleep(sleepTime)
-
-  side2OfL239ChipEnabler.write(disable)
+############################# misc support #############################
 
 def disableAll():
   #disable both sides of L239 chip to start out
-  side1OfL239ChipEnabler.write(disable)
-  side2OfL239ChipEnabler.write(disable)
+  enableDegreeL239Side1.write(disable)
+  enableDegreeL239Side2.write(disable)
 
-############################### track stages ################################
-def turnAndTrack(counter):
-  turnStage1Forward()
-  turnAndTrack_(2, counter - 1)
+#turn motor forward from stage 1 to stage 4, so that motor is in known state, which is state 4,
+#no matter what the initial state was.
+def home():
+  disableAll()
+  energizeStage1()
+  energizeStage2()
+  energizeStage3()
+  energizeStage4()
+  time.sleep(1)
 
-def turnAndTrack_(stage, counter):
-  if counter > 0:
-     if stage == 1:
-       turnStage1Forward()
-       turnAndTrack_(2, counter -1)
-     elif stage == 2:
-       turnStage2Forward()
-       turnAndTrack_(3, counter -1)
-     elif stage == 3:
-       turnStage3Forward()
-       turnAndTrack_(4, counter -1)
+############################### degree  ################################
+#Step the turntable a given number of <ticks or degrees?>, in either forward or backward direction. 
+def rotateTurnTableForward(counter, tickCount, stage):
+  rotateMotorBase(counter, tickCount, stage, incrementTick, rotateStageCountForward,
+                  energizeStage2, energizeStage3, energizeStage4, energizeStage1)
+##################### turn motors base #################################
+                         ###### forward ######
+#rotate a motor forward given # of ticks
+#still needs input functions to control which motor
+def rotateMotorBase(counter, tickCount, stage, tickCountStepper, rotateStageCounter,
+                    rotateWhenAtStage1, rotateWhenAtStage2, rotateWhenAtStage3, rotateWhenAtStage4):
+  stageShifted = stage
+  tickCountShifted = tickCount
+  for count in range(0,counter):
+     if stageShifted == 1:
+       rotateWhenAtStage1()
+       stageShifted = rotateStageCounter(stageShifted)
+       tickCountShifted = tickCountStepper(tickCountShifted)
+     elif stageShifted == 2:
+       rotateWhenAtStage2()
+       stageShifted = rotateStageCounter(stageShifted)
+       tickCountShifted = tickCountStepper(tickCountShifted)  
+     elif stageShifted == 3:
+       rotateWhenAtStage3()
+       stageShifted = rotateStageCounter(stageShifted)
+       tickCountShifted = tickCountStepper(tickCountShifted)  
      else:
-       turnStage4Forward()
-       turnAndTrack_(1, counter -1) 
+       rotateWhenAtStage4()
+       stageShifted = rotateStageCounter(stageShifted)
+       tickCountShifted = tickCountStepper(tickCountShifted)  
+  runScanner_(tickCountShifted, stageShifted)
+
+#before making it handle forward and backwards rotation
+def rotateMotorBaseOrig(counter, tickCount, stage):
+  stageShifted = stage
+  tickCountShifted = tickCount
+  for count in range(0,counter):
+     if stageShifted == 1:
+       energizeStage2()
+       stageShifted = rotateStageForward(stageShifted)
+       tickCountShifted += 1  
+     elif stageShifted == 2:
+       energizeStage3()
+       stageShifted = rotateStageForward(stageShifted)
+       tickCountShifted += 1  
+     elif stageShifted == 3:
+       energizeStage4()
+       stageShifted = rotateStageForward(stageShifted)
+       tickCountShifted += 1  
+     else:
+       energizeStage1()
+       stageShifted = rotateStageForward(stageShifted)
+       tickCountShifted += 1  
+  runScanner_(tickCountShifted, stageShifted)  
+
+#move the current stage of the motor coil engergized state forward.
+#stage 4 wraps back around to state 1.
+#This is related to how there are 4 coil states inside a bi-polar stepper motor.
+def rotateStageCountForward(stage):
   
-################################ test runs ##################################
-def forward4():
-  disableAll()
-  turnStage1Forward()
-  turnStage2Forward()
-  turnStage3Forward()
-  turnStage4Forward()
+  if (stage + 1) >= 5:
+    return 1
+  else:
+    return (stage + 1)
 
-def forward1Back1():
-  disableAll()
-  turnStage1Forward()
-  turnStage1Backwards()
+def rotateStageCountBackward(stage):
+  if (stage - 1) <= 0:
+    return 4
+  else:
+    return stage - 1
 
-def forward2Back2():
-  turnStage1Forward()
-  turnStage2Forward()
-  turnStage2Backwards()
-  turnStage1Backwards()
+def incrementTick(tick):
+  return (tick + 1)
+
+def decrementTick(tick):
+  return (tick - 1)
+
+                         ###### backward ######
+def rotateTurnTableBackward(counter, tickCount, stage):
+  rotateMotorBase(counter, tickCount, stage, decrementTick, rotateStageCountBackward,
+                  energizeStage4, energizeStage1, energizeStage2, energizeStage3)
+
+#before using the base turntable rotator which handles forward and back
+def rotateTurnTableBackwardOrig(counter, degreeTickCount, stage):
+  if counter > 0:
+     counterShifted = counter - 1
+     degreeTickCountShifted = degreeTickCount - 1
+     if stage == 1:
+       energizeStage4()
+       rotateTurnTableBackward(counterShifted, degreeTickCountShifted, 4)
+     elif stage == 2:
+       energizeStage1()
+       rotateTurnTableBackward(counterShifted, degreeTickCountShifted, 1)
+     elif stage == 3:
+       energizeStage2()
+       rotateTurnTableBackward(counterShifted, degreeTickCountShifted, 2)
+     else:
+       energizeStage3()
+       rotateTurnTableBackward(counterShifted, degreeTickCountShifted, 3) 
+  else:
+     runScanner_(degreeTickCount, stage)
+
+################################ user input ##################################
+
+#task:
+ #home the motors so they are in intial state of 4
+ #call runScanner_ with initial state of: stage 4, degreeTick 0
+   #respond to user input for turning/zeroing motors.
+   #track the state of each motor so positions can be calculated.
+     #degree
+     #height
+     #radius
+def runScanner():
+  home()
+  runScanner_(0,4)
+    
+#called from: runScanner
+ #will have been initialized to be in stage 4 with degreeTickCount 0
+def runScanner_(degreeTickCount, stage):
+  prompt = "What next: \nstatus:s \nquit:q \nzeroDegree:zd \nforward: \nback:b "
+  msg = raw_input(prompt)
+
+  if msg == "q":
+    print "quit"
+  elif msg == "s":
+   print "\ndegree ticks: " + str(degreeTickCount)
+   runScanner_(degreeTickCount, stage) 
+  elif msg == "zd":
+    print "\ndegree ticks zero''d: " 
+    runScanner_(0, stage)
+  elif msg == "f":
+    forwardCount = int(raw_input( "\nforward how many: "))
+    rotateTurnTableForward(forwardCount, degreeTickCount, stage)
+  elif msg == "b":
+    backCount = int(raw_input( "\nback how many: "))
+    rotateTurnTableBackward(backCount, degreeTickCount, stage)
+  else:
+    print "\nunkown command"
+    runScanner_(degreeTickCount, stage)
+
+
 #################################run##########################################
-turnAndTrack(8)
+runScanner()
+#testFor()
+
+#home()
+#turnAndTrackForward(4)
+#turnAndTrackBackward(4)
+
+#forward4()
+
+
+#energizeStage1()
+#energizeStage2()
+#energizeStage3()
+#energizeStage4()
+
+
+

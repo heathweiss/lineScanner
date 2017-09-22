@@ -113,9 +113,10 @@ def runScanner():
 
     
   
-  #will have been initialized to be in stage 4 with totalTurntableStepsTaken 0
-  def runScanner_(totalTurntableStepsTaken, internalTurntableMotorStepState):
-    
+  #motor(s) should have been initialized to be in coil stage 4 and total<motor>StepsTaken is started
+  #out at 0.
+  def runScanner_(totalTurntableStepsTaken, turntableCoilState):
+    stepsPer360Degree = 1552
     ##################### turn motors base #################################
     #task:
      #rotate a motor forward/back a given number of steps
@@ -161,37 +162,43 @@ def runScanner():
     
         return round((wrapDegrees(((360.0/stepsPer360Degree) * totalStepsTaken))),2)
     
-    def incrementTick(tick):
+    def incrementStepsTaken(tick):
         return (tick + 1)
     
-    def decrementTick(tick):
+    def decrementStepsTaken(tick):
         return (tick - 1)
     
     #Step the turntable a given number of <ticks or degrees?>, in either forward or backward direction. 
-    def rotateTurnTableForward(counter, tickCount, stage):
+    def rotateTurnTableForward(stepsToTake, totalStepsTaken, coilState):
       #Increases the state. 4 wraps around to state 1.
-      def rotateInternalMotorStepStateForward(stage):
-        if (stage + 1) >= 5:
+      def moveCoilStateForward(coilState):
+        if (coilState + 1) >= 5:
           return 1
         else:
-          return (stage + 1)
+          return (coilState + 1)
       
       
     
-      rotateMotorBase(counter, tickCount, stage, incrementTick, rotateInternalMotorStepStateForward,
+      rotateMotorBase(stepsToTake, totalStepsTaken, coilState, incrementStepsTaken, moveCoilStateForward,
                       turnTableStep4, turnTableStep3, turnTableStep2, turnTableStep1)  
-    def rotateTurnTableBackward(counter, tickCount, stage):
-      #Decreases the state. 1 wraps back up to state 4.
-      def rotateInternalMotorStepStateBackward(stage):
-        if (stage - 1) <= 0:
+    #rotates the turntable motor backwards to decrease the degrees.
+    #Makes a call to rotateMotorBase with appropriate functions passed in for target motor and direction..
+    #return:
+     #turntable moved backwards.
+     #totalStepsTaken: the scoped state is adjusted to reflects final state.
+     #coilState: the scoped state is adjusted to reflect the final state.
+    def rotateTurnTableBackward(stepsToTake, totalStepsTaken, coilState):
+      #Decreases the coil state. 1 wraps back up to state 4.
+      def moveCoilStateBackwards(coilState):
+        if (coilState - 1) <= 0:
           return 4
         else:
-          return stage - 1
-    
-      rotateMotorBase(counter, tickCount, stage, decrementTick, rotateInternalMotorStepStateBackward,
+          return coilState - 1
+      
+      rotateMotorBase(stepsToTake, totalStepsTaken, coilState, decrementStepsTaken, moveCoilStateBackwards,
                       turnTableStep4, turnTableStep3, turnTableStep2, turnTableStep1)
   
-    stepsPer360Degree = 1552
+    
     prompt = "What next: \nstatus:s \nquit:q \nzero turntable steps:zt \nforward steps: \nback steps:b "
     msg = raw_input(prompt)
 
@@ -200,46 +207,22 @@ def runScanner():
     elif msg == "s":
      print "\ntotal turntable steps taken: " + str(totalTurntableStepsTaken)
      print "total turntable degrees: " + str(getDegreeFromTotalStepsTaken(totalTurntableStepsTaken, stepsPer360Degree))
-     runScanner_(totalTurntableStepsTaken, internalTurntableMotorStepState) 
+     runScanner_(totalTurntableStepsTaken, turntableCoilState) 
     elif msg == "zt":
       print "\ndegree ticks zero''d: " 
-      runScanner_(0, internalTurntableMotorStepState)
+      runScanner_(0, turntableCoilState)
     elif msg == "f":
-      forwardCount = int(raw_input( "\nforward how many: "))
-      rotateTurnTableForward(forwardCount, totalTurntableStepsTaken, internalTurntableMotorStepState)
+      forwardStepsToTake = int(raw_input( "\nforward how many: "))
+      rotateTurnTableForward(forwardStepsToTake, totalTurntableStepsTaken, turntableCoilState)
     elif msg == "b":
-      backCount = int(raw_input( "\nback how many: "))
-      rotateTurnTableBackward(backCount, totalTurntableStepsTaken, internalTurntableMotorStepState)
+      backwardStepsToTake = int(raw_input( "\nback how many: "))
+      rotateTurnTableBackward(backwardStepsToTake, totalTurntableStepsTaken, turntableCoilState)
     else:
       print "\nunkown command"
-      runScanner_(totalTurntableStepsTaken, internalTurntableMotorStepState)
+      runScanner_(totalTurntableStepsTaken, turntableCoilState)
 
   home()
   runScanner_(0,4)
-
-def runScanner_beforeNestinggetDegreeFromTotalStepsTakenOrig(totalTurntableStepsTaken, internalTurntableMotorStepState):
-  stepsPer360Degree = 1552
-  prompt = "What next: \nstatus:s \nquit:q \nzero turntable steps:zt \nforward steps: \nback steps:b "
-  msg = raw_input(prompt)
-
-  if msg == "q":
-    print "quit"
-  elif msg == "s":
-   print "\ntotal turntable steps taken: " + str(totalTurntableStepsTaken)
-   print "total turntable degrees: " + str(getDegreeFromTotalStepsTaken(totalTurntableStepsTaken, stepsPer360Degree))
-   runScanner_(totalTurntableStepsTaken, internalTurntableMotorStepState) 
-  elif msg == "zt":
-    print "\ndegree ticks zero''d: " 
-    runScanner_(0, internalTurntableMotorStepState)
-  elif msg == "f":
-    forwardCount = int(raw_input( "\nforward how many: "))
-    rotateTurnTableForward(forwardCount, totalTurntableStepsTaken, internalTurntableMotorStepState)
-  elif msg == "b":
-    backCount = int(raw_input( "\nback how many: "))
-    rotateTurnTableBackward(backCount, totalTurntableStepsTaken, internalTurntableMotorStepState)
-  else:
-    print "\nunkown command"
-    runScanner_(totalTurntableStepsTaken, internalTurntableMotorStepState)
 
 
 #################################run##########################################

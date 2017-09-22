@@ -14,212 +14,33 @@ import time
 #refered to as: degree
 # see Dropbox/3d/scanner_line.txt for wiring from L239 chip to motor.
 # see Dropbox/3d/lineScanner.ods for data about speed/degrees and consistency.
-# amount of time between each step. 
-#0.01 is quite fast.
-sleepTime = 0.01
-# enable a side of the L293D
-enable = 1
-# disable a side of L293D
-disable = 0
-# output 12 volts to motor
-high = 1
-# set to ground on motor
-low = 0
-#coil stages per degree
-stagesPerDegree = 128/30
 
-###gpio pins to able/disable l293d sides. 
-#Each side has it's own enable/dispable pin.
-#side 1
-enableDegreeL239Side1 = mraa.Gpio(2)
-enableDegreeL239Side1.dir(mraa.DIR_OUT)
-#Goes to pin 1 of L239
 
-#side 2
-enableDegreeL239Side2 = mraa.Gpio(3)
-#Goes to pin 9 of L239
-enableDegreeL239Side2.dir(mraa.DIR_OUT)
+#coil stages(ticks) per degree
+#Found out with testing. 
+#should never be declared, so as not to create state.
+#Just pass in this value to any required functions.
+#coilStagesPer360Degree = 1552
 
-#These 2 pins are shared by both stepper motor coils, by enabling/disabling each side of the l293d.
-#Writing 1 side to high, and the other to low, creates the circuit on the currently required coil, which drives the motor.
-#In other words: coilLead1 goes into the current coil, and coilLead2 comes back out of it. 
-coilLead1 = mraa.Gpio(4)
-coilLead2 = mraa.Gpio(5)
-coilLead1.dir(mraa.DIR_OUT)
-coilLead2.dir(mraa.DIR_OUT)
 
-def setCoilsForwardBiased():
-  coilLead2.write(low)
-  coilLead1.write(high)
-  
 
-def setCoilsReverseBiased():
-  coilLead1.write(low)
-  coilLead2.write(high)
 
-def setCoilsNeutral():
-  coilLead1.write(low)
-  coilLead2.write(low)
 
-############################ stage base ###############################
-#task
- #Base function for turning the motor 1 step.
- #refer to safaribooks:Practical Electronics: 15.7 on operation of stepper motor.
- #Has to apply to:
-  #2 coils:
-   #each controlled by 1 side of the l239 chip
-    #only 1 side of chip can be active at 1 time.
-   #each can have a forward or reverse polarity
-#given:
- #chipSide: the side of the L239 chip being used.
- #coilPolarity: Forward or reverse bias of the coil in the motor.
-def turnMotor1Step(chipSide, setCoilPolarity):
-  chipSide.write(enable)
-  
-  setCoilPolarity()
 
-  time.sleep(sleepTime)
-  
-  #setCoilsNeutral()
-  #not sure this is usefull. Try without for now.
-  
-  chipSide.write(disable)
-################################ stage 1  ############################
-def energizeStage1():
-  turnMotor1Step(enableDegreeL239Side1, setCoilsForwardBiased)
 
-############################### stage 2 ##############################
-def energizeStage2():
-  #turnMotor1Step(enableDegreeL239Side2, setCoilsReverseBiased)
-  #should be
-  turnMotor1Step(enableDegreeL239Side2, setCoilsForwardBiased)
 
-############################### stage 3 #################################
-def energizeStage3():
-  turnMotor1Step(enableDegreeL239Side1, setCoilsReverseBiased)
 
-################################# stage 4 ###############################
-def energizeStage4():
-  turnMotor1Step(enableDegreeL239Side2, setCoilsReverseBiased)
 
-############################# misc support #############################
 
-def disableAll():
-  #disable both sides of L239 chip to start out
-  enableDegreeL239Side1.write(disable)
-  enableDegreeL239Side2.write(disable)
 
-#turn motor forward from stage 1 to stage 4, so that motor is in known state, which is state 4,
-#no matter what the initial state was.
-def home():
-  disableAll()
-  energizeStage1()
-  energizeStage2()
-  energizeStage3()
-  energizeStage4()
-  time.sleep(1)
 
-############################### degree  ################################
-#Step the turntable a given number of <ticks or degrees?>, in either forward or backward direction. 
-def rotateTurnTableForward(counter, tickCount, stage):
-  rotateMotorBase(counter, tickCount, stage, incrementTick, rotateStageCountForward,
-                  energizeStage2, energizeStage3, energizeStage4, energizeStage1)
-##################### turn motors base #################################
-                         ###### forward ######
-#rotate a motor forward given # of ticks
-#still needs input functions to control which motor
-def rotateMotorBase(counter, tickCount, stage, tickCountStepper, rotateStageCounter,
-                    rotateWhenAtStage1, rotateWhenAtStage2, rotateWhenAtStage3, rotateWhenAtStage4):
-  stageShifted = stage
-  tickCountShifted = tickCount
-  for count in range(0,counter):
-     if stageShifted == 1:
-       rotateWhenAtStage1()
-       stageShifted = rotateStageCounter(stageShifted)
-       tickCountShifted = tickCountStepper(tickCountShifted)
-     elif stageShifted == 2:
-       rotateWhenAtStage2()
-       stageShifted = rotateStageCounter(stageShifted)
-       tickCountShifted = tickCountStepper(tickCountShifted)  
-     elif stageShifted == 3:
-       rotateWhenAtStage3()
-       stageShifted = rotateStageCounter(stageShifted)
-       tickCountShifted = tickCountStepper(tickCountShifted)  
-     else:
-       rotateWhenAtStage4()
-       stageShifted = rotateStageCounter(stageShifted)
-       tickCountShifted = tickCountStepper(tickCountShifted)  
-  runScanner_(tickCountShifted, stageShifted)
 
-#before making it handle forward and backwards rotation
-def rotateMotorBaseOrig(counter, tickCount, stage):
-  stageShifted = stage
-  tickCountShifted = tickCount
-  for count in range(0,counter):
-     if stageShifted == 1:
-       energizeStage2()
-       stageShifted = rotateStageForward(stageShifted)
-       tickCountShifted += 1  
-     elif stageShifted == 2:
-       energizeStage3()
-       stageShifted = rotateStageForward(stageShifted)
-       tickCountShifted += 1  
-     elif stageShifted == 3:
-       energizeStage4()
-       stageShifted = rotateStageForward(stageShifted)
-       tickCountShifted += 1  
-     else:
-       energizeStage1()
-       stageShifted = rotateStageForward(stageShifted)
-       tickCountShifted += 1  
-  runScanner_(tickCountShifted, stageShifted)  
 
-#move the current stage of the motor coil engergized state forward.
-#stage 4 wraps back around to state 1.
-#This is related to how there are 4 coil states inside a bi-polar stepper motor.
-def rotateStageCountForward(stage):
-  
-  if (stage + 1) >= 5:
-    return 1
-  else:
-    return (stage + 1)
 
-def rotateStageCountBackward(stage):
-  if (stage - 1) <= 0:
-    return 4
-  else:
-    return stage - 1
 
-def incrementTick(tick):
-  return (tick + 1)
 
-def decrementTick(tick):
-  return (tick - 1)
 
-                         ###### backward ######
-def rotateTurnTableBackward(counter, tickCount, stage):
-  rotateMotorBase(counter, tickCount, stage, decrementTick, rotateStageCountBackward,
-                  energizeStage4, energizeStage1, energizeStage2, energizeStage3)
-
-#before using the base turntable rotator which handles forward and back
-def rotateTurnTableBackwardOrig(counter, degreeTickCount, stage):
-  if counter > 0:
-     counterShifted = counter - 1
-     degreeTickCountShifted = degreeTickCount - 1
-     if stage == 1:
-       energizeStage4()
-       rotateTurnTableBackward(counterShifted, degreeTickCountShifted, 4)
-     elif stage == 2:
-       energizeStage1()
-       rotateTurnTableBackward(counterShifted, degreeTickCountShifted, 1)
-     elif stage == 3:
-       energizeStage2()
-       rotateTurnTableBackward(counterShifted, degreeTickCountShifted, 2)
-     else:
-       energizeStage3()
-       rotateTurnTableBackward(counterShifted, degreeTickCountShifted, 3) 
-  else:
-     runScanner_(degreeTickCount, stage)
+                        
 
 ################################ user input ##################################
 
@@ -232,49 +53,196 @@ def rotateTurnTableBackwardOrig(counter, degreeTickCount, stage):
      #height
      #radius
 def runScanner():
+  # amount of time between each step. 
+  #0.01 is quite fast and smooth.
+  sleepTime = 0.01
+  # output 12 volts to motor
+  high = 1
+  # set to ground on motor
+  low = 0
+
+  #refer to Practical Electronics chap. 15.6 on polarities required to drive the stepper motor.
+  #step1 corresponds to 1st step as required to energize coil 1 in the required polarity.
+  #time is give to the coil to move. Then is is set to nuetral and given some time to adjust.  
+  def turnTableStep1():
+    turnTableCoil1a.write(high)
+    turnTableCoil1b.write(low)
+    time.sleep(sleepTime)
+    turnTableCoil1a.write(low)
+    time.sleep(sleepTime)
+
+  def turnTableStep2():
+    turnTableCoil2a.write(high)
+    turnTableCoil2b.write(low)
+    time.sleep(sleepTime)
+    turnTableCoil2a.write(low)
+    time.sleep(sleepTime)  
+
+  def turnTableStep3():
+    turnTableCoil1a.write(low)
+    turnTableCoil1b.write(high)
+    time.sleep(sleepTime)
+    turnTableCoil1b.write(low)
+    time.sleep(sleepTime)
+
+  def turnTableStep4():
+    turnTableCoil2a.write(low)
+    turnTableCoil2b.write(high)
+    time.sleep(sleepTime)
+    turnTableCoil2b.write(low)
+    time.sleep(sleepTime)
+
+  #The gpio pwm pins that set the voltages on the motor stepper coils.
+  #coil1a/b is for one coil, and coil2a/b is for the other coil.
+  #These are name to go with chart: http://mechatronics.mech.northwestern.edu/design_ref/actuators/stepper_drive1.html
+  turnTableCoil1a = mraa.Gpio(2)
+  turnTableCoil1b = mraa.Gpio(3)
+  turnTableCoil1a.dir(mraa.DIR_OUT)
+  turnTableCoil1b.dir(mraa.DIR_OUT)
+
+  turnTableCoil2a = mraa.Gpio(4)
+  turnTableCoil2b = mraa.Gpio(5)
+  turnTableCoil2a.dir(mraa.DIR_OUT)
+  turnTableCoil2b.dir(mraa.DIR_OUT)
+
+  def home():
+    turnTableStep1()
+    turnTableStep2()
+    turnTableStep3()
+    turnTableStep4()
+
+    
+  
+  #will have been initialized to be in stage 4 with totalTurntableStepsTaken 0
+  def runScanner_(totalTurntableStepsTaken, internalTurntableMotorStepState):
+    
+    ##################### turn motors base #################################
+    #task:
+     #rotate a motor forward/back a given number of steps
+     #still needs input functions to control which motor
+    #given:
+     #stepsToTake: how many steps to take(steps as in stepper motor)
+     #totalStepsTaken: the current amount(pos/neg) of steps taken since motor was started or zeroed.
+     #internalMotorStepState: The internal state of the motor coils, which needs to be know so that the
+      #correct polarities can be applied to the correct coil, to turn the motor 1 step in required direction.
+     #adjTotalStepsTaken: function increments/decrements the stepCount, as dictated by forward or backwards
+     #adjInternalMotorStepState: move the internalMotorStepState forward/backward as dictated by motor direction.
+     # use of this base function.
+    def rotateMotorBase(stepsToTake, totalStepsTaken, internalMotorStepState, adjTotalStepsTaken, adjInternalMotorStepState,
+                        rotateMotorAwayFromInternalStep1, rotateMotorAwayFromInternalStep2, rotateMotorAwayFromInternalStep3, rotateMotorAwayFromInternalStep4):
+      for i in range(0,stepsToTake):
+         if internalMotorStepState == 1:
+           rotateMotorAwayFromInternalStep1()
+           internalMotorStepState = adjInternalMotorStepState(internalMotorStepState)
+           totalStepsTaken = adjTotalStepsTaken(totalStepsTaken)
+         elif internalMotorStepState == 2:
+           rotateMotorAwayFromInternalStep2()
+           internalMotorStepState = adjInternalMotorStepState(internalMotorStepState)
+           totalStepsTaken = adjTotalStepsTaken(totalStepsTaken)  
+         elif internalMotorStepState == 3:
+           rotateMotorAwayFromInternalStep3()
+           internalMotorStepState = adjInternalMotorStepState(internalMotorStepState)
+           totalStepsTaken = adjTotalStepsTaken(totalStepsTaken)  
+         else:
+           rotateMotorAwayFromInternalStep4()
+           internalMotorStepState = adjInternalMotorStepState(internalMotorStepState)
+           totalStepsTaken = adjTotalStepsTaken(totalStepsTaken)  
+      runScanner_(totalStepsTaken, internalMotorStepState)
+
+
+    def getDegreeFromTotalStepsTaken(totalStepsTaken, stepsPer360Degree):
+        def wrapDegrees(degrees):
+            if degrees > 360:
+              return wrapDegrees((degrees - 360))
+            elif degrees < 0:
+              return wrapDegrees((degrees + 360))
+            else:
+              return degrees
+    
+        return round((wrapDegrees(((360.0/stepsPer360Degree) * totalStepsTaken))),2)
+    
+    def incrementTick(tick):
+        return (tick + 1)
+    
+    def decrementTick(tick):
+        return (tick - 1)
+    
+    #Step the turntable a given number of <ticks or degrees?>, in either forward or backward direction. 
+    def rotateTurnTableForward(counter, tickCount, stage):
+      #Increases the state. 4 wraps around to state 1.
+      def rotateInternalMotorStepStateForward(stage):
+        if (stage + 1) >= 5:
+          return 1
+        else:
+          return (stage + 1)
+      
+      
+    
+      rotateMotorBase(counter, tickCount, stage, incrementTick, rotateInternalMotorStepStateForward,
+                      turnTableStep4, turnTableStep3, turnTableStep2, turnTableStep1)  
+    def rotateTurnTableBackward(counter, tickCount, stage):
+      #Decreases the state. 1 wraps back up to state 4.
+      def rotateInternalMotorStepStateBackward(stage):
+        if (stage - 1) <= 0:
+          return 4
+        else:
+          return stage - 1
+    
+      rotateMotorBase(counter, tickCount, stage, decrementTick, rotateInternalMotorStepStateBackward,
+                      turnTableStep4, turnTableStep3, turnTableStep2, turnTableStep1)
+  
+    stepsPer360Degree = 1552
+    prompt = "What next: \nstatus:s \nquit:q \nzero turntable steps:zt \nforward steps: \nback steps:b "
+    msg = raw_input(prompt)
+
+    if msg == "q":
+      print "quit"
+    elif msg == "s":
+     print "\ntotal turntable steps taken: " + str(totalTurntableStepsTaken)
+     print "total turntable degrees: " + str(getDegreeFromTotalStepsTaken(totalTurntableStepsTaken, stepsPer360Degree))
+     runScanner_(totalTurntableStepsTaken, internalTurntableMotorStepState) 
+    elif msg == "zt":
+      print "\ndegree ticks zero''d: " 
+      runScanner_(0, internalTurntableMotorStepState)
+    elif msg == "f":
+      forwardCount = int(raw_input( "\nforward how many: "))
+      rotateTurnTableForward(forwardCount, totalTurntableStepsTaken, internalTurntableMotorStepState)
+    elif msg == "b":
+      backCount = int(raw_input( "\nback how many: "))
+      rotateTurnTableBackward(backCount, totalTurntableStepsTaken, internalTurntableMotorStepState)
+    else:
+      print "\nunkown command"
+      runScanner_(totalTurntableStepsTaken, internalTurntableMotorStepState)
+
   home()
   runScanner_(0,4)
-    
-#called from: runScanner
- #will have been initialized to be in stage 4 with degreeTickCount 0
-def runScanner_(degreeTickCount, stage):
-  prompt = "What next: \nstatus:s \nquit:q \nzeroDegree:zd \nforward: \nback:b "
+
+def runScanner_beforeNestinggetDegreeFromTotalStepsTakenOrig(totalTurntableStepsTaken, internalTurntableMotorStepState):
+  stepsPer360Degree = 1552
+  prompt = "What next: \nstatus:s \nquit:q \nzero turntable steps:zt \nforward steps: \nback steps:b "
   msg = raw_input(prompt)
 
   if msg == "q":
     print "quit"
   elif msg == "s":
-   print "\ndegree ticks: " + str(degreeTickCount)
-   runScanner_(degreeTickCount, stage) 
-  elif msg == "zd":
+   print "\ntotal turntable steps taken: " + str(totalTurntableStepsTaken)
+   print "total turntable degrees: " + str(getDegreeFromTotalStepsTaken(totalTurntableStepsTaken, stepsPer360Degree))
+   runScanner_(totalTurntableStepsTaken, internalTurntableMotorStepState) 
+  elif msg == "zt":
     print "\ndegree ticks zero''d: " 
-    runScanner_(0, stage)
+    runScanner_(0, internalTurntableMotorStepState)
   elif msg == "f":
     forwardCount = int(raw_input( "\nforward how many: "))
-    rotateTurnTableForward(forwardCount, degreeTickCount, stage)
+    rotateTurnTableForward(forwardCount, totalTurntableStepsTaken, internalTurntableMotorStepState)
   elif msg == "b":
     backCount = int(raw_input( "\nback how many: "))
-    rotateTurnTableBackward(backCount, degreeTickCount, stage)
+    rotateTurnTableBackward(backCount, totalTurntableStepsTaken, internalTurntableMotorStepState)
   else:
     print "\nunkown command"
-    runScanner_(degreeTickCount, stage)
+    runScanner_(totalTurntableStepsTaken, internalTurntableMotorStepState)
 
 
 #################################run##########################################
 runScanner()
-#testFor()
-
-#home()
-#turnAndTrackForward(4)
-#turnAndTrackBackward(4)
-
-#forward4()
-
-
-#energizeStage1()
-#energizeStage2()
-#energizeStage3()
-#energizeStage4()
-
-
-
+#testWrapDegrees()
+#testGetDegreeFromTotalStepsTaken(388,1552)

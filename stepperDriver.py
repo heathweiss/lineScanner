@@ -63,7 +63,8 @@ def runScanner():
 
   #refer to Practical Electronics chap. 15.6 on polarities required to drive the stepper motor.
   #step1 corresponds to 1st step as required to energize coil 1 in the required polarity.
-  #time is give to the coil to move. Then is is set to nuetral and given some time to adjust.  
+  #time is give to the coil to move. Then is is set to nuetral and given some time to adjust. 
+  ### turnTable motor steps ### 
   def turnTableStep1():
     turnTableCoil1a.write(high)
     turnTableCoil1b.write(low)
@@ -92,9 +93,40 @@ def runScanner():
     turnTableCoil2b.write(low)
     time.sleep(sleepTime)
 
-  #The gpio pwm pins that set the voltages on the motor stepper coils.
-  #coil1a/b is for one coil, and coil2a/b is for the other coil.
-  #These are name to go with chart: http://mechatronics.mech.northwestern.edu/design_ref/actuators/stepper_drive1.html
+  ### radius motor steps ###
+  def radiusStep1():
+    radiusCoil1a.write(high)
+    radiusCoil1b.write(low)
+    time.sleep(sleepTime)
+    radiusCoil1a.write(low)
+    time.sleep(sleepTime)
+
+  def radiusStep2():
+    radiusCoil2a.write(high)
+    radiusCoil2b.write(low)
+    time.sleep(sleepTime)
+    radiusCoil2a.write(low)
+    time.sleep(sleepTime)  
+
+  def radiusStep3():
+    radiusCoil1a.write(low)
+    radiusCoil1b.write(high)
+    time.sleep(sleepTime)
+    radiusCoil1b.write(low)
+    time.sleep(sleepTime)
+
+  def radiusStep4():
+    radiusCoil2a.write(low)
+    radiusCoil2b.write(high)
+    time.sleep(sleepTime)
+    radiusCoil2b.write(low)
+    time.sleep(sleepTime)
+
+
+  #The gpio pwm (pulse width modulation) pins that set the voltages on the motor stepper coils.
+  #<motor>Coil1a/b is for one coil, and <motor>Coil2a/b is for the other coil. There are 2 coils/motor.
+  #These are named to go with chart: http://mechatronics.mech.northwestern.edu/design_ref/actuators/stepper_drive1.html
+  ### turntable motor coils ###
   turnTableCoil1a = mraa.Gpio(2)
   turnTableCoil1b = mraa.Gpio(3)
   turnTableCoil1a.dir(mraa.DIR_OUT)
@@ -105,17 +137,38 @@ def runScanner():
   turnTableCoil2a.dir(mraa.DIR_OUT)
   turnTableCoil2b.dir(mraa.DIR_OUT)
 
-  def home():
+  ### radius motor coils ###
+  radiusCoil1a = mraa.Gpio(6)
+  radiusCoil1b = mraa.Gpio(7)
+  radiusCoil1a.dir(mraa.DIR_OUT)
+  radiusCoil1b.dir(mraa.DIR_OUT)
+
+  radiusCoil2a = mraa.Gpio(8)
+  radiusCoil2b = mraa.Gpio(9)
+  radiusCoil2a.dir(mraa.DIR_OUT)
+  radiusCoil2b.dir(mraa.DIR_OUT)
+
+  #Turn the motor 4 steps to ensure it is in step 4.
+  #This initializes motor step position for start of scan.
+  ### turnTable ###
+  def turnTableHome():
     turnTableStep1()
     turnTableStep2()
     turnTableStep3()
     turnTableStep4()
-
+   
+  ### radius ###
+  def radiusHome():
+    radiusStep1()
+    radiusStep2()
+    radiusStep3()
+    radiusStep4()
     
   
   #motor(s) should have been initialized to be in coil stage 4 and total<motor>StepsTaken is started
   #out at 0.
-  def runScanner_(totalTurntableStepsTaken, turntableCoilState):
+  def runScanner_(totalStepsTaken, coilState):
+  #def runScanner_(totalTurntableStepsTaken, turntableCoilState, totalRadiusStepsTaken, radiusCoilState):
     stepsPer360Degree = 1552
     ##################### turn motors base #################################
     #task:
@@ -130,6 +183,28 @@ def runScanner():
      #adjInternalMotorStepState: move the internalMotorStepState forward/backward as dictated by motor direction.
      # use of this base function.
     def rotateMotorBase(stepsToTake, totalStepsTaken, internalMotorStepState, adjTotalStepsTaken, adjInternalMotorStepState,
+                        rotateMotorAwayFromInternalStep1, rotateMotorAwayFromInternalStep2, rotateMotorAwayFromInternalStep3, rotateMotorAwayFromInternalStep4):
+      for i in range(0,stepsToTake):
+         if internalMotorStepState == 1:
+           rotateMotorAwayFromInternalStep1()
+           internalMotorStepState = adjInternalMotorStepState(internalMotorStepState)
+           totalStepsTaken = adjTotalStepsTaken(totalStepsTaken)
+         elif internalMotorStepState == 2:
+           rotateMotorAwayFromInternalStep2()
+           internalMotorStepState = adjInternalMotorStepState(internalMotorStepState)
+           totalStepsTaken = adjTotalStepsTaken(totalStepsTaken)  
+         elif internalMotorStepState == 3:
+           rotateMotorAwayFromInternalStep3()
+           internalMotorStepState = adjInternalMotorStepState(internalMotorStepState)
+           totalStepsTaken = adjTotalStepsTaken(totalStepsTaken)  
+         else:
+           rotateMotorAwayFromInternalStep4()
+           internalMotorStepState = adjInternalMotorStepState(internalMotorStepState)
+           totalStepsTaken = adjTotalStepsTaken(totalStepsTaken)  
+      runScanner_(totalStepsTaken, internalMotorStepState)
+    #before having both turntable and radius motor inf
+    #Maybe I will not have to modify it.
+    def rotateMotorBaseOrig(stepsToTake, totalStepsTaken, internalMotorStepState, adjTotalStepsTaken, adjInternalMotorStepState,
                         rotateMotorAwayFromInternalStep1, rotateMotorAwayFromInternalStep2, rotateMotorAwayFromInternalStep3, rotateMotorAwayFromInternalStep4):
       for i in range(0,stepsToTake):
          if internalMotorStepState == 1:
@@ -164,9 +239,11 @@ def runScanner():
     
     def incrementStepsTaken(tick):
         return (tick + 1)
-    
+
     def decrementStepsTaken(tick):
         return (tick - 1)
+
+
     
     #Step the turntable a given number of <ticks or degrees?>, in either forward or backward direction. 
     def rotateTurnTableForward(stepsToTake, totalStepsTaken, coilState):
@@ -176,11 +253,26 @@ def runScanner():
           return 1
         else:
           return (coilState + 1)
-      
-      
-    
+       
+      #takes the totalStepsTaken dict.
+      #there was no original as this is new for the totalStepsTaken dict
+      def incrementTurnTableStepsTaken(totalStepsTaken):
+        totalStepsTaken['coilSteps'] = incrementStepsTaken (totalStepsTaken['coilSteps'])
+        return totalStepsTaken
+
+      rotateMotorBase(stepsToTake, totalStepsTaken, coilState, incrementTurnTableStepsTaken, moveCoilStateForward,
+                      turnTableStep4, turnTableStep3, turnTableStep2, turnTableStep1)  
+    #original 
+    def rotateTurnTableForwardOrig(stepsToTake, totalStepsTaken, coilState):
+      #Increases the state. 4 wraps around to state 1.
+      def moveCoilStateForward(coilState):
+        if (coilState + 1) >= 5:
+          return 1
+        else:
+          return (coilState + 1)
       rotateMotorBase(stepsToTake, totalStepsTaken, coilState, incrementStepsTaken, moveCoilStateForward,
                       turnTableStep4, turnTableStep3, turnTableStep2, turnTableStep1)  
+
     #rotates the turntable motor backwards to decrease the degrees.
     #Makes a call to rotateMotorBase with appropriate functions passed in for target motor and direction..
     #return:
@@ -194,38 +286,84 @@ def runScanner():
           return 4
         else:
           return coilState - 1
-      
+       
+      def decrementTurnTableStepsTaken(totalStepsTaken):
+        totalStepsTaken['coilSteps'] = decrementStepsTaken (totalStepsTaken['coilSteps'])
+        return totalStepsTaken
+
+      rotateMotorBase(stepsToTake, totalStepsTaken, coilState, decrementTurnTableStepsTaken, moveCoilStateBackwards,
+                      turnTableStep4, turnTableStep3, turnTableStep2, turnTableStep1)
+
+    #before using dict for totalStepsTaken
+    def rotateTurnTableBackwardOrig(stepsToTake, totalStepsTaken, coilState):
+      #Decreases the coil state. 1 wraps back up to state 4.
+      def moveCoilStateBackwards(coilState):
+        if (coilState - 1) <= 0:
+          return 4
+        else:
+          return coilState - 1
       rotateMotorBase(stepsToTake, totalStepsTaken, coilState, decrementStepsTaken, moveCoilStateBackwards,
                       turnTableStep4, turnTableStep3, turnTableStep2, turnTableStep1)
+
+
+
+    #Step the radius motor a given number of <ticks or degrees?>, inwards. 
+    #def rotateRadiusIn(stepsToTake, totalStepsTaken, coilState):
+    #only use coil state to start with
+    def rotateRadiusIn(stepsToTake, totalStepsTaken, coilState):
+      #Increases the state. 4 wraps around to state 1.
+      def moveCoilStateForward(coilState):
+        if (coilState + 1) >= 5:
+          return 1
+        else:
+          return (coilState + 1)
+      rotateMotorBase(stepsToTake, totalStepsTaken, coilState, incrementStepsTaken, moveCoilStateForward,
+                      turnTableStep4, turnTableStep3, turnTableStep2, turnTableStep1)  
+
   
     
-    prompt = "What next: \nstatus:s \nquit:q \nzero turntable steps:zt \nforward steps: \nback steps:b "
+    prompt = "What next: help:h "
     msg = raw_input(prompt)
 
     if msg == "q":
       print "quit"
+    elif msg == "h":
+      print "\nstatus:s \nquit:q \nzero turntable steps:zt \nforward steps:f \nback steps:b \nin:i \nout: "
+      runScanner_(totalStepsTaken, coilState) 
     elif msg == "s":
-     print "\ntotal turntable steps taken: " + str(totalTurntableStepsTaken)
-     print "total turntable degrees: " + str(getDegreeFromTotalStepsTaken(totalTurntableStepsTaken, stepsPer360Degree))
-     runScanner_(totalTurntableStepsTaken, turntableCoilState) 
+     print "\ntotal turntable steps taken: " + str(totalStepsTaken['coilSteps'])
+     print "total turntable degrees: " + str(getDegreeFromTotalStepsTaken(totalStepsTaken['coilSteps'], stepsPer360Degree))
+     runScanner_(totalStepsTaken, coilState) 
+     #runScanner_(totalTurntableStepsTaken, turntableCoilState, totalRadiusStepsTaken, radisuCoilState) 
     elif msg == "zt":
       print "\ndegree ticks zero''d: " 
-      runScanner_(0, turntableCoilState)
+      runScanner_(0, coilState)
     elif msg == "f":
       forwardStepsToTake = int(raw_input( "\nforward how many: "))
-      rotateTurnTableForward(forwardStepsToTake, totalTurntableStepsTaken, turntableCoilState)
+      rotateTurnTableForward(forwardStepsToTake, totalStepsTaken, coilState)
     elif msg == "b":
       backwardStepsToTake = int(raw_input( "\nback how many: "))
-      rotateTurnTableBackward(backwardStepsToTake, totalTurntableStepsTaken, turntableCoilState)
+      rotateTurnTableBackward(backwardStepsToTake, totalStepsTaken, coilState)
+    elif msg == "i":
+      print "\n in gets called here once implemented"
+    elif msg == "o":
+      print "\n out gets called here once implemented"
     else:
       print "\nunkown command"
-      runScanner_(totalTurntableStepsTaken, turntableCoilState)
+      runScanner_(totalStepsTaken, coilState)
+      
 
-  home()
-  runScanner_(0,4)
+  #where the rubber meets the road.
+  #initialize motors
+  turnTableHome()
+  radiusHome()
+
+  runScanner_({'coilSteps' : 0},4)
+  
 
 
 #################################run##########################################
 runScanner()
+
 #testWrapDegrees()
 #testGetDegreeFromTotalStepsTaken(388,1552)

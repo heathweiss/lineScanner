@@ -151,6 +151,7 @@ def runScanner():
   def runScanner_(scannerState):
   #def runScanner_(totalStepsTaken, coilState):
     stepsPer360Degree = 1552
+    stepsPerMMRadius = 25.6
     ##################### turn motors base #################################
     #task:
      #rotate a motor forward/back a given number of steps
@@ -192,8 +193,17 @@ def runScanner():
               return wrapDegrees((degrees + 360))
             else:
               return degrees
-    
         return round((wrapDegrees(((360.0/stepsPer360Degree) * totalStepsTaken))),2)
+
+    def getRadiusFromTotalStepsTaken(scannerState, stepsPerMMRadius):
+      return extractRadiusStepsTaken(scannerState) / stepsPerMMRadius
+
+    def setRadiusTotalStepsTaken(scannerState, newStepsTaken):
+      scannerState['radiusTtlSteps'] = newStepsTaken
+      return scannerState
+
+    def converMMToRadiusSteps(millimeters, stepsPerMMRadius):
+      return (millimeters * stepsPerMMRadius)
     
     def incrementStepsTaken(tick):
         return (tick + 1)
@@ -207,12 +217,26 @@ def runScanner():
     def extractTurnTableStepsTaken(scannerState):
       return scannerState['turnTblTtlSteps']
 
+    def extractRadiusStepsTaken(scannerState):
+      return scannerState['radiusTtlSteps']
+
+    def extractRadiusCoilState(scannerState):
+      return scannerState['radiusCoilState']
+
     def setTurnTableCoilState(scannerState, newCoilState):
       scannerState['turnTblCoilState'] = newCoilState 
       return scannerState
 
     def setTurnTableStepsTaken(scannerState, newStepsTaken):
       scannerState['turnTblTtlSteps'] = newStepsTaken
+      return scannerState
+
+    def setRadiusCoilState(scannerState, newCoilState):
+      scannerState['radiusCoilState'] = newCoilState 
+      return scannerState
+
+    def setRadiusStepsTaken(scannerState, newStepsTaken):
+      scannerState['radiusTtlSteps'] = newStepsTaken
       return scannerState
 
     
@@ -255,18 +279,37 @@ def runScanner():
                       turnTableStep4, turnTableStep3, turnTableStep2, turnTableStep1)
 
 
-    #Step the radius motor a given number of <ticks or degrees?>, inwards. 
-    #def rotateRadiusIn(stepsToTake, totalStepsTaken, coilState):
-    #only use coil state to start with
-    def rotateRadiusIn(stepsToTake, totalStepsTaken, coilState):
+    #Steps the radius motor a given number of ticks inwards, decreasing the radius. 
+    def rotateRadiusIn(stepsToTake, scannerState):
       #Increases the state. 4 wraps around to state 1.
-      def moveCoilStateForward(coilState):
-        if (coilState + 1) >= 5:
-          return 1
+      def moveCoilStateBackwards(scannerState):
+        if (extractRadiusCoilState(scannerState) - 1) <= 0:
+          return (setRadiusCoilState(scannerState, 4))
         else:
-          return (coilState + 1)
-      rotateMotorBase(stepsToTake, totalStepsTaken, coilState, incrementStepsTaken, moveCoilStateForward,
-                      turnTableStep4, turnTableStep3, turnTableStep2, turnTableStep1)  
+          return (setRadiusCoilState(scannerState, (extractRadiusCoilState(scannerState) - 1)))
+       
+      def decrementStepsTaken(scannerState):
+        scannerState = setRadiusStepsTaken(scannerState, extractRadiusStepsTaken(scannerState) - 1) 
+        return scannerState
+
+      rotateMotorBase(stepsToTake, scannerState, extractRadiusCoilState, decrementStepsTaken, moveCoilStateBackwards,
+                      radiusStep4, radiusStep3, radiusStep2, radiusStep1)  
+
+    #Steps the radius motor a given number of ticks outwards, increasing the radius. 
+    def rotateRadiusOut(stepsToTake, scannerState):
+      #Increases the state. 4 wraps around to state 1.
+      def moveCoilStateForward(scannerState):
+        if (extractRadiusCoilState(scannerState) + 1) >= 5:
+          return (setRadiusCoilState(scannerState, 1))
+        else:
+          return (setRadiusCoilState(scannerState, (extractRadiusCoilState(scannerState) + 1)))
+       
+      def incrementStepsTaken(scannerState):
+        scannerState = setRadiusStepsTaken(scannerState, extractRadiusStepsTaken(scannerState) + 1) 
+        return scannerState
+
+      rotateMotorBase(stepsToTake, scannerState, extractRadiusCoilState, incrementStepsTaken, moveCoilStateForward,
+                      radiusStep4, radiusStep3, radiusStep2, radiusStep1)  
 
   
     
@@ -276,19 +319,29 @@ def runScanner():
     if msg == "q":
       print "quit"
     elif msg == "h":
-      print "\nstatus:s \nquit:q \nzero turntable steps:zt \nforward steps:f \nback steps:b \nin:i \nout: "
+      print "\nstatus:s \nquit:q \nzero turntable steps:zt \nzero radius steps:zr \nset radius mm:sr \nforward steps:f \nback steps:b \nin:i \nout: "
       runScanner_(scannerState) 
     elif msg == "s":
-     #print "\ntotal turntable steps taken: " + str(totalStepsTaken['turnTblTtlSteps'])
+     #show current status of scanner: degrees, radius <and soon height>
      print "\ntotal turntable steps taken: " + str(extractTurnTableStepsTaken(scannerState))
-     #print "total turntable degrees: " + str(getDegreeFromTotalStepsTaken(totalStepsTaken['turnTblTtlSteps'], stepsPer360Degree))
      print "total turntable degrees: " + str(getDegreeFromTotalStepsTaken(extractTurnTableStepsTaken(scannerState), stepsPer360Degree)) 
+     print "\ntotal radius steps taken: " + str(extractRadiusStepsTaken(scannerState))
+     print "\ncurrent radius: " + str(getRadiusFromTotalStepsTaken(scannerState, stepsPerMMRadius))
      runScanner_(scannerState) 
      #runScanner_(totalTurntableStepsTaken, turntableCoilState, totalRadiusStepsTaken, radisuCoilState) 
     elif msg == "zt":
+      #zero out the total turn table steps taken
       print "\ndegree ticks zero''d: " 
-      #runScanner_(0, coilState)
       runScanner_(setTurnTableStepsTaken(scannerState, 0))
+    elif msg == "zr":
+      #zero out the total radius steps taken
+      print "\nradius ticks zero''d: " 
+      runScanner_(setRadiusStepsTaken(scannerState, 0))
+    elif msg == "sr":
+      radiusMM = int(raw_input( "\nhow many radius mm: "))
+      radiusTicks = converMMToRadiusSteps(radiusMM, stepsPerMMRadius)
+      print "\nradius ticks set to " + str(radiusTicks)
+      runScanner_(setRadiusTotalStepsTaken(scannerState, radiusTicks))
     elif msg == "f":
       forwardStepsToTake = int(raw_input( "\nforward how many: "))
       #rotateTurnTableForward(forwardStepsToTake, totalStepsTaken, coilState)
@@ -298,9 +351,11 @@ def runScanner():
       #rotateTurnTableBackward(backwardStepsToTake, totalStepsTaken, coilState)
       rotateTurnTableBackward(backwardStepsToTake, scannerState)
     elif msg == "i":
-      print "\n in gets called here once implemented"
+      inwardStepsToTake = int(raw_input( "\nin how many: "))
+      rotateRadiusIn(inwardStepsToTake,scannerState)
     elif msg == "o":
-      print "\n out gets called here once implemented"
+      outwardStepsToTake = int(raw_input( "\nout how many: "))
+      rotateRadiusOut(outwardStepsToTake,scannerState)
     else:
       print "\nunkown command"
       runScanner_(scannerState)

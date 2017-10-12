@@ -103,6 +103,46 @@ def runScanner():
     radiusCoil2b.write(low)
     time.sleep(sleepTime)
 
+  ### height motor steps ####
+  heightCoil1a = mraa.Gpio(10)
+  heightCoil1b = mraa.Gpio(11)
+  heightCoil1a.dir(mraa.DIR_OUT)
+  heightCoil1b.dir(mraa.DIR_OUT)
+
+  heightCoil2a = mraa.Gpio(12)
+  heightCoil2b = mraa.Gpio(13)
+  heightCoil2a.dir(mraa.DIR_OUT)
+  heightCoil2b.dir(mraa.DIR_OUT)
+
+  def heightStep1():
+    heightCoil1a.write(high)
+    heightCoil1b.write(low)
+    time.sleep(sleepTime)
+    heightCoil1a.write(low)
+    time.sleep(sleepTime)
+
+  def heightStep2():
+    heightCoil2a.write(high)
+    heightCoil2b.write(low)
+    time.sleep(sleepTime)
+    heightCoil2a.write(low)
+    time.sleep(sleepTime)  
+
+  def heightStep3():
+    heightCoil1a.write(low)
+    heightCoil1b.write(high)
+    time.sleep(sleepTime)
+    heightCoil1b.write(low)
+    time.sleep(sleepTime)
+
+  def heightStep4():
+    heightCoil2a.write(low)
+    heightCoil2b.write(high)
+    time.sleep(sleepTime)
+    heightCoil2b.write(low)
+    time.sleep(sleepTime)
+
+
 
   #The gpio pwm (pulse width modulation) pins that set the voltages on the motor stepper coils.
   #<motor>Coil1a/b is for one coil, and <motor>Coil2a/b is for the other coil. There are 2 coils/motor.
@@ -129,7 +169,7 @@ def runScanner():
   radiusCoil2a.dir(mraa.DIR_OUT)
   radiusCoil2b.dir(mraa.DIR_OUT)
 
-  #Turn the motor 4 steps to ensure it is in step 4.
+  #Turn the each motor 4 steps to ensure they are all step 4.
   #This initializes motor step position for start of scan.
   ### turnTable ###
   def turnTableHome():
@@ -144,6 +184,19 @@ def runScanner():
     radiusStep2()
     radiusStep3()
     radiusStep4()
+
+  ### height ###
+  def heightHome():
+    #move downwards
+    #heightStep1()
+    #heightStep2()
+    #heightStep3()
+    #heightStep4()
+    #move upwards
+    heightStep4()
+    heightStep3()
+    heightStep2()
+    heightStep1()
     
   
   #motor(s) should have been initialized to be in coil stage 4 and total<motor>StepsTaken is started
@@ -152,6 +205,7 @@ def runScanner():
   #def runScanner_(totalStepsTaken, coilState):
     stepsPer360Degree = 1552
     stepsPerMMRadius = 25.6
+    stepsPerMMHeight = 25.6
     ##################### turn motors base #################################
     #task:
      #rotate a motor forward/back a given number of steps
@@ -198,12 +252,22 @@ def runScanner():
     def getRadiusFromTotalStepsTaken(scannerState, stepsPerMMRadius):
       return extractRadiusStepsTaken(scannerState) / stepsPerMMRadius
 
+    def getHeightFromTotalStepsTaken(scannerState, stepsPerMMHeight):
+      return extractHeightStepsTaken(scannerState) / stepsPerMMHeight
+
     def setRadiusTotalStepsTaken(scannerState, newStepsTaken):
       scannerState['radiusTtlSteps'] = newStepsTaken
       return scannerState
 
+    def setHeightTotalStepsTaken(scannerState, newStepsTaken):
+      scannerState['heightTtlSteps'] = newStepsTaken
+      return scannerState
+
     def converMMToRadiusSteps(millimeters, stepsPerMMRadius):
       return (millimeters * stepsPerMMRadius)
+
+    def converMMToHeightSteps(millimeters, stepsPerMMHeight):
+      return (millimeters * stepsPerMMHeight)
     
     def incrementStepsTaken(tick):
         return (tick + 1)
@@ -213,6 +277,12 @@ def runScanner():
 
     def extractTurnTableCoilState(scannerState):
       return scannerState['turnTblCoilState']
+
+    def extractHeightCoilState(scannerState):
+      return scannerState['heightCoilState']
+
+    def extractHeightStepsTaken(scannerState):
+      return scannerState['heightTtlSteps']
 
     def extractTurnTableStepsTaken(scannerState):
       return scannerState['turnTblTtlSteps']
@@ -227,6 +297,10 @@ def runScanner():
       scannerState['turnTblCoilState'] = newCoilState 
       return scannerState
 
+    def setHeightCoilState(scannerState, newCoilState):
+      scannerState['heightCoilState'] = newCoilState 
+      return scannerState
+
     def setTurnTableStepsTaken(scannerState, newStepsTaken):
       scannerState['turnTblTtlSteps'] = newStepsTaken
       return scannerState
@@ -239,7 +313,10 @@ def runScanner():
       scannerState['radiusTtlSteps'] = newStepsTaken
       return scannerState
 
-    
+    def setHeightStepsTaken(scannerState, newStepsTaken):
+      scannerState['heightTtlSteps'] = newStepsTaken
+      return scannerState
+   
     #Step the turntable a given number of <ticks or degrees?>, in either forward or backward direction. 
     def rotateTurnTableForward(stepsToTake, scannerState):
       #Increases the state. 4 wraps around to state 1.
@@ -311,6 +388,38 @@ def runScanner():
       rotateMotorBase(stepsToTake, scannerState, extractRadiusCoilState, incrementStepsTaken, moveCoilStateForward,
                       radiusStep4, radiusStep3, radiusStep2, radiusStep1)  
 
+    #Step the height a given number of <ticks or degrees?>, in upward direction. 
+    def rotateHeightUp(stepsToTake, scannerState):
+      #Increases the state. 4 wraps around to state 1.
+      def moveCoilStateForward(scannerState):
+        if (extractHeightCoilState(scannerState) + 1) >= 5:
+          return (setHeightCoilState(scannerState, 1))
+        else:
+          return (setHeightCoilState(scannerState, (extractHeightCoilState(scannerState) + 1)))
+       
+      def incrementStepsTaken(scannerState):
+        scannerState['heightTtlSteps'] = (scannerState['heightTtlSteps'] + 1)
+        return scannerState
+         
+      rotateMotorBase(stepsToTake, scannerState, extractHeightCoilState, incrementStepsTaken, moveCoilStateForward,
+                      heightStep4, heightStep3, heightStep2, heightStep1)  
+
+
+    #Step the height a given number of <ticks or degrees?>, in downwards direction. 
+    def rotateHeightDown(stepsToTake, scannerState):
+      #Increases the state. 4 wraps around to state 1.
+      def moveCoilStateBackward(scannerState):
+        if (extractHeightCoilState(scannerState) - 1) <= 0:
+          return (setHeightCoilState(scannerState, 4))
+        else:
+          return (setHeightCoilState(scannerState, (extractHeightCoilState(scannerState) - 1)))
+       
+      def decrementStepsTaken(scannerState):
+        scannerState['heightTtlSteps'] = (scannerState['heightTtlSteps'] - 1)
+        return scannerState
+         
+      rotateMotorBase(stepsToTake, scannerState, extractHeightCoilState, decrementStepsTaken, moveCoilStateBackward,
+                      heightStep4, heightStep3, heightStep2, heightStep1)  
   
     
     prompt = "What next: help:h "
@@ -319,7 +428,8 @@ def runScanner():
     if msg == "q":
       print "quit"
     elif msg == "h":
-      print "\nstatus:s \nquit:q \nzero turntable steps:zt \nzero radius steps:zr \nset radius mm:sr \nforward steps:f \nback steps:b \nin:i \nout: "
+      print "\nstatus:s \nquit:q \nzero turntable steps:zt \nzero radius steps:zr \nset radius mm:sr \nset height mm:sh  "
+      print "forward steps:f \nback steps:b \nin:i \nout:0 \nup:u \ndown:d"
       runScanner_(scannerState) 
     elif msg == "s":
      #show current status of scanner: degrees, radius <and soon height>
@@ -327,6 +437,8 @@ def runScanner():
      print "total turntable degrees: " + str(getDegreeFromTotalStepsTaken(extractTurnTableStepsTaken(scannerState), stepsPer360Degree)) 
      print "\ntotal radius steps taken: " + str(extractRadiusStepsTaken(scannerState))
      print "\ncurrent radius: " + str(getRadiusFromTotalStepsTaken(scannerState, stepsPerMMRadius))
+     print "\ntotal height steps taken: " + str(extractHeightStepsTaken(scannerState))
+     print "\ncurrent height: " + str(getHeightFromTotalStepsTaken(scannerState, stepsPerMMHeight))
      runScanner_(scannerState) 
      #runScanner_(totalTurntableStepsTaken, turntableCoilState, totalRadiusStepsTaken, radisuCoilState) 
     elif msg == "zt":
@@ -342,6 +454,11 @@ def runScanner():
       radiusTicks = converMMToRadiusSteps(radiusMM, stepsPerMMRadius)
       print "\nradius ticks set to " + str(radiusTicks)
       runScanner_(setRadiusTotalStepsTaken(scannerState, radiusTicks))
+    elif msg == "sh":
+      heightMM = int(raw_input( "\nhow many height mm: "))
+      heightTicks = converMMToHeightSteps(heightMM, stepsPerMMHeight)
+      print "\nheight ticks set to " + str(heightTicks)
+      runScanner_(setHeightTotalStepsTaken(scannerState, heightTicks))
     elif msg == "f":
       forwardStepsToTake = int(raw_input( "\nforward how many: "))
       #rotateTurnTableForward(forwardStepsToTake, totalStepsTaken, coilState)
@@ -356,19 +473,27 @@ def runScanner():
     elif msg == "o":
       outwardStepsToTake = int(raw_input( "\nout how many: "))
       rotateRadiusOut(outwardStepsToTake,scannerState)
+    elif msg == "d":
+      downwardStepsToTake = int(raw_input( "down how many: "))
+      rotateHeightDown(downwardStepsToTake,scannerState)
+    elif msg == "u":
+      upwardStepsToTake = int(raw_input( "up how many: "))
+      rotateHeightUp(upwardStepsToTake,scannerState)
     else:
       print "\nunkown command"
       runScanner_(scannerState)
-      
+
 
   #where the rubber meets the road.
   #initialize motors
   turnTableHome()
   radiusHome()
-
-  #runScanner_({'trnTblCoilSteps : 0},4)
+  heightHome()
+  
+  #pass in all the initial state info.
   runScanner_({'turnTblTtlSteps':0, 'turnTblCoilState':4,
-                'radiusTtlSteps':0, 'radiusCoilState':4 })
+               'radiusTtlSteps':0, 'radiusCoilState':4,
+               'heightTtlSteps':0, 'heightCoilState':4 })
   
 
 

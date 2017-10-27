@@ -1,6 +1,12 @@
 
 import mraa  
-import time    
+import time  
+import sqlite3
+from sqliteDB import sayHello, printLayers, getLayers, insertLayer, insertPoint
+
+conn = sqlite3.connect('lineScanner.db')
+
+c = conn.cursor()
 # Drives a bipolar stepper motor through 4 steps.
 # Done on intel edison.
 # Uses a L293D chip, one side of the L239 for each coil of the motor
@@ -426,6 +432,7 @@ def runScanner():
     msg = raw_input(prompt)
 
     if msg == "q":
+      conn.close()
       print "quit"
     elif msg == "h":
       print "\nstatus:s \nquit:q \nzero turntable steps:zt \nzero radius steps:zr \nset radius mm:sr \nset height mm:sh  "
@@ -479,6 +486,29 @@ def runScanner():
     elif msg == "u":
       upwardStepsToTake = int(raw_input( "up how many: "))
       rotateHeightUp(upwardStepsToTake,scannerState)
+    elif msg == "insertLayer":
+      layerName = (raw_input( "\nenter layer name: "))
+      x = int(raw_input( "x-axis value: "))
+      y = int(raw_input( "y-axis value: "))
+      z = int(raw_input( "z-axis value: "))
+      insertLayer(layerName, x, y, z, conn, c)
+      runScanner_(scannerState)
+    elif msg == "showLayers":
+      printLayers(getLayers(c))
+      runScanner_(scannerState)
+    elif msg == "setCurrentLayerId":
+      layerId = int(raw_input( "current layer id: "))
+      scannerState['currentLayerId'] = layerId
+      runScanner_(scannerState)
+    elif msg == "showCurrentLayerId":
+      print str(scannerState['currentLayerId'])
+      runScanner_(scannerState)
+    elif msg ==  "insertPoint":
+      degree = getDegreeFromTotalStepsTaken(extractTurnTableStepsTaken(scannerState), stepsPer360Degree)
+      height = getHeightFromTotalStepsTaken(scannerState, stepsPerMMHeight)
+      radius = getRadiusFromTotalStepsTaken(scannerState, stepsPerMMRadius)
+      insertPoint(degree, height, radius, (scannerState['currentLayerId']), conn, c)
+      runScanner_(scannerState)
     else:
       print "\nunkown command"
       runScanner_(scannerState)
@@ -493,7 +523,8 @@ def runScanner():
   #pass in all the initial state info.
   runScanner_({'turnTblTtlSteps':0, 'turnTblCoilState':4,
                'radiusTtlSteps':0, 'radiusCoilState':4,
-               'heightTtlSteps':0, 'heightCoilState':4 })
+               'heightTtlSteps':0, 'heightCoilState':4,
+               'currentLayerId':0 })
   
 
 

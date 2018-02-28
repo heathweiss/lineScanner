@@ -3,6 +3,13 @@ import time
 import sqlite3
 from sqliteDB import sayHello, printLayers, getLayers, insertLayer, insertPoint
 
+scannerState = {'turnTblTtlSteps':0, 'turnTblCoilState':4,
+                'radiusTtlSteps':0, 'radiusCoilState':4,
+                'heightTtlSteps':0, 'heightCoilState':4,
+                'currentLayerId':0 
+               }
+getUserInput = True
+
 conn = sqlite3.connect('lineScanner.db')
 
 c = conn.cursor()
@@ -430,21 +437,23 @@ def ensureInt(inputToCx):
     int(inputToCx)
   except ValueError:
     print "value was not an int"
-    False
+    return False
   else:
-    True
+    return True
 
-def userInput():
+def userInput(scannerState):
     prompt = "What next: help:h "
     msg = raw_input(prompt)
 
     if msg == "quit":
       conn.close()
       print "quit"
-      getUserInput = False
+      return False
+      
     elif msg == "h":
       print "\nstatus:s \nquit:q \nzero turntable steps:zt \nzero radius steps:zr \nset radius mm:sr \nset height mm:sh  "
       print "forward steps:f \nback steps:b \nin:i \nout:0 \nup:u \ndown:d"
+      return True
       #runScanner_(scannerState) 
     elif msg == "s":
      #show current status of scanner: degrees, radius <and soon height>
@@ -454,26 +463,36 @@ def userInput():
      print "\ncurrent radius: " + str(getRadiusFromTotalStepsTaken(scannerState, stepsPerMMRadius))
      print "\ntotal height steps taken: " + str(extractHeightStepsTaken(scannerState))
      print "\ncurrent height: " + str(getHeightFromTotalStepsTaken(scannerState, stepsPerMMHeight))
-     #runScanner_(scannerState) 
+     return True
+    elif msg == "turnTableHome":
+      #run turnTableHome() to initialize the turntable motor.
+      turnTableHome()
+      return True
+    elif msg == "heightHome":
+      #run heightHome() to initialize the turntable motor.
+      heightHome()
+      return True
+    elif msg == "radiusHome":
+      #run radiusHome() to initialize the turntable motor.
+      radiusHome()
+      return True
     elif msg == "zeroTable":
       #zero out the total turn table steps taken
       print "\ndegree ticks zero''d: " 
-      #runScanner_(setTurnTableStepsTaken(scannerState, 0))
       scannerState = setTurnTableStepsTaken(scannerState, 0)
+      return True
     elif msg == "zeroRadius":
       #zero out the total radius steps taken
       print "\nradius ticks zero''d: " 
-      #runScanner_(setRadiusStepsTaken(scannerState, 0))
       scannerState = setRadiusStepsTaken(scannerState, 0)
+      return True
     elif msg == "setRadius":
       userInput = (raw_input( "\nradius in mm? "))
       if ensureInt(userInput):
          radiusTicks = converMMToRadiusSteps(int(userInput), stepsPerMMRadius)
          scannerState = setRadiusTotalStepsTaken(scannerState, radiusTicks)
          print "\nradius ticks set to " + str(radiusTicks)
-      
-      #runScanner_(setRadiusTotalStepsTaken(scannerState, radiusTicks))
-      
+      return True
     elif msg == "setHeight":
       userInput = raw_input( "\nheight in mm? ")
       if (ensureInt(userInput)):
@@ -481,67 +500,83 @@ def userInput():
         heightTicks = converMMToHeightSteps(heightMM, stepsPerMMHeight)
         print "\nheight set to " + str(heightMM)
         print "\nticks set to " + str(heightTicks)
-        #runScanner_(setHeightTotalStepsTaken(scannerState, heightTicks))
         scannerState = setHeightTotalStepsTaken(scannerState, heightTicks)
-    elif msg == "forward":
+      return True
+    #forward
+    elif msg == "f":
       userInput = (raw_input( "\nhow many ticks forward? "))
       if (ensureInt(userInput)):
+         print "was valid input"
          forwardStepsToTake = int(userInput)
          scannerState = rotateTurnTableForward(forwardStepsToTake, scannerState)
-    elif msg == "back":
+      else:
+         print "was not valid input"
+      return True
+    #back
+    elif msg == "b":
       userInput = (raw_input( "\nhow many ticks back? "))
       if (ensureInt(userInput)):
          backwardStepsToTake = int(userInput)
-         #rotateTurnTableBackward(backwardStepsToTake, totalStepsTaken, coilState)
          scannerState = rotateTurnTableBackward(backwardStepsToTake, scannerState)
-    elif msg == "in":
+      return True
+    #in radius
+    elif msg == "i":
       userInput = (raw_input( "\nhow many ticks in? "))
       if (ensureInt(userInput)):
          inwardStepsToTake = int(userInput)
          scannerState = rotateRadiusIn(inwardStepsToTake,scannerState)
-    elif msg == "out":
+      return True
+    #out radius
+    elif msg == "o":
       userInput = (raw_input( "\nhow many ticks out? "))
       if (ensureInt(userInput)):
          outwardStepsToTake = int(userInput)
          scannerState = rotateRadiusOut(outwardStepsToTake,scannerState)
-    elif msg == "down":
+      return True
+    #down height
+    elif msg == "d":
       userInput = (raw_input( "\nhow many ticks down? "))
       if (ensureInt(userInput)):
          downwardStepsToTake = int(userInput)
          scannerState = rotateHeightDown(downwardStepsToTake,scannerState)
-    elif msg == "up":
+      return True
+    #up height
+    elif msg == "u":
       userInput = (raw_input( "\nhow many ticks up? "))
       if (ensureInt(userInput)):
          upwardStepsToTake = int(userInput)
          scannerState = rotateHeightUp(upwardStepsToTake,scannerState)
+      return True
     elif msg == "insertLayer":
       layerName = (raw_input( "\nenter layer name: "))
       x = int(raw_input( "x-axis value: "))
       y = int(raw_input( "y-axis value: "))
       z = int(raw_input( "z-axis value: "))
       insertLayer(layerName, x, y, z, conn, c)
-      #runScanner_(scannerState)
+      return True
     elif msg == "showLayers":
       printLayers(getLayers(c))
-      #runScanner_(scannerState)
+      return True
     elif msg == "setCurrentLayerId":
       userInput = (raw_input( "\nset Current Layer Id? "))
       if (ensureInt(userInput)):
          layerId = int(userInput)
          scannerState['currentLayerId'] = layerId
-         #runScanner_(scannerState)
+      return True
     elif msg == "showCurrentLayerId":
       print str(scannerState['currentLayerId'])
-      #runScanner_(scannerState)
-    elif msg ==  "insertPoint":
+      return True
+    #insertPoint
+    elif msg ==  "ip":
       degree = getDegreeFromTotalStepsTaken(extractTurnTableStepsTaken(scannerState), stepsPer360Degree)
       height = getHeightFromTotalStepsTaken(scannerState, stepsPerMMHeight)
       radius = getRadiusFromTotalStepsTaken(scannerState, stepsPerMMRadius)
       insertPoint(degree, height, radius, (scannerState['currentLayerId']), conn, c)
-      #runScanner_(scannerState)
+      return True
     else:
       print "\nunkown command"
-      runScanner_(scannerState)
+      return True
+      
 
 ################################################################################################################################### 
 
@@ -549,19 +584,13 @@ def userInput():
 
  
 
-scannerState = 
-              {'turnTblTtlSteps':0, 'turnTblCoilState':4,
-               'radiusTtlSteps':0, 'radiusCoilState':4,
-               'heightTtlSteps':0, 'heightCoilState':4,
-               'currentLayerId':0 
-              }
 
 #initialize motors so they are all in a know coil state
 turnTableHome()
 radiusHome()
 heightHome()
 
-getUserInput = True
+
 while getUserInput:
-  userInput()
+  getUserInput = userInput(scannerState)
   
